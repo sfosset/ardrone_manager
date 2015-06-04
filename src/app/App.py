@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 import rospy
 import roslaunch
-#from test1.srv import *
-from test1.srv import *
+from ardrone_manager.srv import *
 
 class Drone:
 	def __init__(self, name, ip):
@@ -12,8 +11,8 @@ class Drone:
 
 	def connect(self):
 		#Launching the drone node
-		#self.node = roslaunch.core.Node('ardrone_autonomy', 'ardrone_driver', self.name, '/', None, '-ip '+self.ip)
-		self.node = roslaunch.core.Node('rqt_gui', 'rqt_gui')
+		self.node = roslaunch.core.Node('ardrone_autonomy', 'ardrone_driver', self.name, '/', None, '-ip '+self.ip)
+		#self.node = roslaunch.core.Node('rqt_gui', 'rqt_gui')
 		
 		launch = roslaunch.scriptapi.ROSLaunch()
 		launch.start()
@@ -121,6 +120,35 @@ class Registry:
 			for drone in group.droneList.values():
 				liste[group.name][drone.name]={'ip':drone.ip, 'isConnected':drone.isConnected}
 		return str(liste)
+
+class DroneInterface:
+	def __init__(self, registry):
+		self.registry = registry
+
+	def connectDrone(self, req):
+		groupName=req.groupName
+		droneName=req.droneName
+		if self.registry.groupList.has_key(groupName, droneName):
+			group = self.registry.groupList[groupName]
+			if group.droneList.has_key(droneName):
+				print("Trying to connect drone '"+droneName+"' from group '"+group.name+"")
+				groupe.droneList[droneName].connect()
+			else:
+				print("Can't connect the drone '"+droneName+"', no drone with this name in group '"+group.name+"'")
+	def disconnectDrone(self, req):
+		groupName=req.groupName
+		droneName=req.droneName
+		if self.registry.groupList.has_key(groupName, droneName):
+			group = self.registry.groupList[groupName]
+			if group.droneList.has_key(droneName):
+				print("Trying to disconnect drone '"+droneName+"' from group '"+group.name+"")
+				groupe.droneList[droneName].disconnect()
+			else:
+				print("Can't disconnect the drone '"+droneName+"', no drone with this name in group '"+group.name+"'")
+
+
+
+
 def main():
 	
 	rospy.loginfo('Initializing the ARDrone manager node')
@@ -128,6 +156,9 @@ def main():
 
 	rospy.loginfo('Creating new drone registry')
 	registry=Registry()
+	
+	rospy.loginfo('Creating new drone interface linked to the registry')
+	droneInterface=DroneInterface(registry)
 
 	rospy.loginfo('Creating "/ardrone_manager/add_group" service')
 	addGroupService = rospy.Service('/ardrone_manager/add_group', AddGroup, registry.addGroup)
@@ -142,6 +173,12 @@ def main():
 	moveDroneService = rospy.Service('/ardrone_manager/move_drone', MoveDrone, registry.moveDrone)
 	rospy.loginfo('Creating "/ardrone_manager/get_list" service')
 	getListService = rospy.Service('/ardrone_manager/get_list', GetList, registry.getList)
+	
+	rospy.loginfo('Creating "/ardrone_manager/connect_drone" service')
+	connectDroneService = rospy.Service('/ardrone_manager/connect_drone', ConnectDrone, droneInterface.connectDrone)
+	rospy.loginfo('Creating "/ardrone_manager/disconnect_drone" service')
+	disconnectDroneService = rospy.Service('/ardrone_manager/disconnect_drone', DisconnectDrone, droneInterface.disconnectDrone)
+
 
 
 	rospy.spin()
