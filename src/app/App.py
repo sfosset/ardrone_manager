@@ -60,9 +60,11 @@ class Registry:
 				self.delDrone(group.name, drone.name) #For disconnecting the drones
 			del self.groupList[groupName] 
 			print("Group '"+groupName+"' deleted")
+			return groupName
 		else:
 			print("Can't delete the group '"+groupName+"', no group with this name")
- 
+ 			return ""
+
 	def addDrone(self, req):		
 		groupName=req.groupName
 		droneName=req.droneName
@@ -72,7 +74,7 @@ class Registry:
 				for drone in group.droneList.values():
 					if drone.name == droneName:
 						print("A drone with the name '"+drone.name+"'  already exists in the group '"+group.name+"'")
-						return drone
+						return drone.name
 	
 			group = self.groupList[groupName]
 			drone = Drone(droneName, ip)
@@ -80,7 +82,7 @@ class Registry:
 			print("Drone '"+drone.name+"' added in group '"+group.name+"'")
 		else:
 			print("Group '"+groupName+"' doesn't exists")
-			return None
+			return ""
 
 	def delDrone(self, req):
 		groupName=req.groupName
@@ -91,9 +93,10 @@ class Registry:
 				groupe.droneList[droneName].disconnect()
 				del groupe.droneList[droneName]
 				print("Drone '"+droneName+"' from group '"+group.name+"' deleted")
+				return droneName
 			else:
 				print("Can't delete the drone '"+droneName+"', no drone with this name in group '"+group.name+"'")
-
+				return ""
 	def moveDrone(self, req):
 		droneName=req.droneName
 		oldGroupName=req.oldGroupName
@@ -107,12 +110,16 @@ class Registry:
 					newGroup.droneList[drone.name]=drone
 					del oldGroup.droneList[drone.name]
 					print("Drone '"+drone.name+"' moved from group '"+oldGroupName+"' to group '"+newGroupName+"'")
+					return drone.name
 				else:
 					print("Can't move drone '"+drone.name+"' from group '"+oldGroupName+"' to group '"+newGroupName+"', no destination group with this name")
+					return ""
 			else: 
 				print("Can't move drone '"+drone.name+"' from group '"+oldGroupName+"' to group '"+newGroupName+"', no drone with this name in the departure group")
+				return ""
 		else:
 			print("Can't move drone '"+drone.name+"' from group '"+oldGroupName+"' to group '"+newGroupName+"', no departure group with this name")
+			return ""
 	def getList(self, req):
 		liste={}
 		for group in self.groupList.values():
@@ -133,8 +140,11 @@ class DroneInterface:
 			if group.droneList.has_key(droneName):
 				print("Trying to connect drone '"+droneName+"' from group '"+group.name+"")
 				groupe.droneList[droneName].connect()
+				return droneName
 			else:
 				print("Can't connect the drone '"+droneName+"', no drone with this name in group '"+group.name+"'")
+				return ""
+
 	def disconnectDrone(self, req):
 		groupName=req.groupName
 		droneName=req.droneName
@@ -143,8 +153,10 @@ class DroneInterface:
 			if group.droneList.has_key(droneName):
 				print("Trying to disconnect drone '"+droneName+"' from group '"+group.name+"")
 				groupe.droneList[droneName].disconnect()
+				return droneName
 			else:
 				print("Can't disconnect the drone '"+droneName+"', no drone with this name in group '"+group.name+"'")
+				return ""
 
 
 

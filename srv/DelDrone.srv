@@ -1,3 +1,4 @@
 string groupName
 string droneName
 ---
+string result

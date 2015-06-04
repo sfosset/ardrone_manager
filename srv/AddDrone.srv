@@ -2,3 +2,4 @@ string groupName
 string droneName
 string ip
 ---
+string result
