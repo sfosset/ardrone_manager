@@ -2,7 +2,7 @@
 import rospy
 import roslaunch
 from ardrone_manager.srv import *
-
+from std_msgs.msg import *
 class Drone:
 	def __init__(self, name, ip):
 		self.name = name
@@ -44,10 +44,13 @@ class Registry:
 	def __init__(self):
 		self.groupList = {}
 
+		rospy.loginfo('Creating "/ardrone_manager/list" topic')
+		self.list_pub=rospy.Publisher('/ardrone_manager/list', String, queue_size=5)
 	def addGroup(self, req):
 		groupName=req.groupName
 		if not self.groupList.has_key(groupName):
 			self.groupList[groupName]=DroneGroup(groupName)
+			self.list_pub.publish(self.getList())
 			return self.groupList[groupName].name
 		else:
 			print("A group with the name '"+groupName+"' already exists")
@@ -60,6 +63,7 @@ class Registry:
 				self.delDrone(group.name, drone.name) #For disconnecting the drones
 			del self.groupList[groupName] 
 			print("Group '"+groupName+"' deleted")
+			self.list_pub.publish(self.getList())
 			return groupName
 		else:
 			print("Can't delete the group '"+groupName+"', no group with this name")
@@ -74,12 +78,14 @@ class Registry:
 				for drone in group.droneList.values():
 					if drone.name == droneName:
 						print("A drone with the name '"+drone.name+"'  already exists in the group '"+group.name+"'")
-						return drone.name
+						return ""
 	
 			group = self.groupList[groupName]
 			drone = Drone(droneName, ip)
 			group.addDrone(drone)
-			print("Drone '"+drone.name+"' added in group '"+group.name+"'")
+			self.list_pub.publish(self.getList())
+			print("Drone '"+droneName+"' added in group '"+groupName+"'")
+			return droneName
 		else:
 			print("Group '"+groupName+"' doesn't exists")
 			return ""
@@ -92,6 +98,7 @@ class Registry:
 			if group.droneList.has_key(droneName):
 				groupe.droneList[droneName].disconnect()
 				del groupe.droneList[droneName]
+				self.list_pub.publish(self.getList())
 				print("Drone '"+droneName+"' from group '"+group.name+"' deleted")
 				return droneName
 			else:
@@ -109,6 +116,7 @@ class Registry:
 					newGroup = self.groupList[newGroupName]
 					newGroup.droneList[drone.name]=drone
 					del oldGroup.droneList[drone.name]
+					self.list_pub.publish(self.getList())
 					print("Drone '"+drone.name+"' moved from group '"+oldGroupName+"' to group '"+newGroupName+"'")
 					return drone.name
 				else:
@@ -120,7 +128,7 @@ class Registry:
 		else:
 			print("Can't move drone '"+drone.name+"' from group '"+oldGroupName+"' to group '"+newGroupName+"', no departure group with this name")
 			return ""
-	def getList(self, req):
+	def getList(self):
 		liste={}
 		for group in self.groupList.values():
 			liste[group.name]={}
@@ -183,8 +191,6 @@ def main():
 	delDroneService = rospy.Service('/ardrone_manager/del_drone', DelDrone, registry.delDrone)
 	rospy.loginfo('Creating "/ardrone_manager/move_drone" service')
 	moveDroneService = rospy.Service('/ardrone_manager/move_drone', MoveDrone, registry.moveDrone)
-	rospy.loginfo('Creating "/ardrone_manager/get_list" service')
-	getListService = rospy.Service('/ardrone_manager/get_list', GetList, registry.getList)
 	
 	rospy.loginfo('Creating "/ardrone_manager/connect_drone" service')
 	connectDroneService = rospy.Service('/ardrone_manager/connect_drone', ConnectDrone, droneInterface.connectDrone)
@@ -192,6 +198,7 @@ def main():
 	disconnectDroneService = rospy.Service('/ardrone_manager/disconnect_drone', DisconnectDrone, droneInterface.disconnectDrone)
 
 
+	
 
 	rospy.spin()
 #	group1 = registry.addGroup('groupe1')
