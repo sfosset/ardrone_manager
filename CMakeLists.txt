@@ -133,6 +133,7 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
  install(PROGRAMS
    src/app/App.py
+   src/gui/Gui.py
    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 
