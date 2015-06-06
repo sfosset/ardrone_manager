@@ -61,8 +61,8 @@ find_package(catkin REQUIRED COMPONENTS
    DelDrone.srv
    MoveDrone.srv
    GetList.srv
-   ConnectDrone.srv
-   DisconnectDrone.srv
+   StartDrone.srv
+   StopDrone.srv
  )
 
 ## Generate actions in the 'action' folder
