@@ -65,13 +65,20 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
 	        self.setupUi()
 
 	def setupUi(self):
+
+		#main window
 	        self.setObjectName("MainWindow")
 		self.setWindowTitle("Drone Manager")
 	        self.resize(1280, 720)
+	
+		#first container
 	        self.centralwidget = QtWidgets.QWidget(self)
 	        self.centralwidget.setObjectName("centralwidget")
 	        self.horizontalLayout = QtWidgets.QHBoxLayout(self.centralwidget)
 	        self.horizontalLayout.setObjectName("horizontalLayout")
+		self.setCentralWidget(self.centralwidget)
+
+		#tree widget on the left
 	        self.treeWidget = QtWidgets.QTreeWidget(self.centralwidget)
 	        self.treeWidget.setEnabled(True)
 	        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
@@ -82,27 +89,49 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
 	        self.treeWidget.setObjectName("treeWidget")
         	self.treeWidget.headerItem().setText(0, "Groups and Drones")
         	self.horizontalLayout.addWidget(self.treeWidget)
-        	self.widget = QtWidgets.QWidget(self.centralwidget)
-        	sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-	        sizePolicy.setHorizontalStretch(0)
-	        sizePolicy.setVerticalStretch(0)
-	        sizePolicy.setHeightForWidth(self.widget.sizePolicy().hasHeightForWidth())
-	        self.widget.setSizePolicy(sizePolicy)
-	        self.widget.setLayoutDirection(QtCore.Qt.LeftToRight)	
-	        self.widget.setObjectName("widget")
-	        self.horizontalLayout_2 = QtWidgets.QHBoxLayout(self.widget)
-	        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
-	        self.horizontalLayout_2.setObjectName("horizontalLayout_2")
-	        self.widget_2 = QtWidgets.QWidget(self.widget)
-	        self.setCentralWidget(self.centralwidget)
+		self.treeWidget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+		self.treeWidget.customContextMenuRequested.connect(self.treeWidgetContextMenuHandler)	
 
+
+		
+		#navdata widget
+		self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)
+		#self.tableWidget.setGeometry(QtCore.QRect(120, 190, 256, 192))
+	        self.tableWidget.setObjectName("tableWidget")
+        	self.tableWidget.setColumnCount(2)
+	        self.tableWidget.setRowCount(1)
+		self.tableWidget.setShowGrid(False)
+		
+		#adding headers
+        	item = QtWidgets.QTableWidgetItem()
+		item.setText("Parameter")
+	        self.tableWidget.setHorizontalHeaderItem(0, item)
+        	item = QtWidgets.QTableWidgetItem()
+		item.setText("Value")
+		self.tableWidget.setHorizontalHeaderItem(1, item)
+		self.tableWidget.verticalHeader().setVisible(False)
+
+		#adding items
+	        item = QtWidgets.QTableWidgetItem()
+		self.tableWidget.setItem(0, 0, item)
+		item.setText("x")
+		item.setTextAlignment(QtCore.Qt.AlignCenter)
+	        item = QtWidgets.QTableWidgetItem()
+	        self.tableWidget.setItem(0, 1, item)
+		item.setText("y")
+		item.setTextAlignment(QtCore.Qt.AlignCenter)
+
+		self.tableWidget.resizeColumnsToContents()
+
+		self.horizontalLayout.addWidget(self.tableWidget)
+		self.tableWidget.horizontalHeader().setStretchLastSection(True)
+		self.tableWidget.resizeColumnsToContents()
+		
+		#menu bar
 		menuAdd = self.menuBar().addMenu("Add")
 		actionGroup = menuAdd.addAction("Group", self.addGroupHandler)
 		actionDrone = menuAdd.addAction("Drone", self.addDroneHandler)
-	        #QtCore.QMetaObject.connectSlotsByName(self)
 
-		self.treeWidget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-		self.treeWidget.customContextMenuRequested.connect(self.treeWidgetContextMenuHandler)	
 
 	def addGroupHandler(self):
 		print("i wanna add a group")
