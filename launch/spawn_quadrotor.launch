@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="sim_name" default="ardrone"/>
+    <group ns="$(arg sim_name)">
+    <include file="$(find cvg_sim_gazebo)/launch/spawn_quadrotor.launch" >
+      <arg name="sim_name" value = "$(arg sim_name)" />
+      <arg name="model" value="$(find cvg_sim_gazebo)/urdf/quadrotor_sensors.urdf.xacro"/> 
+    </include>
+    </group>
+</launch>

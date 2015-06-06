@@ -1,5 +1,6 @@
 string groupName
 string droneName
 string ip
+string droneType
 ---
 string result
