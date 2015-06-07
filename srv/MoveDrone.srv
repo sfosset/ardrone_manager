@@ -1,5 +1,4 @@
 string droneName
-string oldGroupName
 string newGroupName
 ---
 string result

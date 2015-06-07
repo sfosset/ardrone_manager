@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import signal
 import shlex
 import rospy
 import roslaunch
@@ -6,6 +7,7 @@ import rospkg
 import subprocess
 import os
 from ardrone_manager.srv import *
+from gazebo_msgs.srv import*
 from std_msgs.msg import *
 def launchFileLaunch2(pkg_name, launch_file_name):
 	rospack=rospkg.RosPack()
@@ -57,8 +59,12 @@ class SimDrone:
 			self.process=launchFileLaunch('ardrone_manager', 'spawn_quadrotor.launch', 'sim_name:="'+self.name+'"')
 			return None
 	def stop(self):
+		rospy.wait_for_service('gazebo/delete_model')
+		delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
+		result=delete_model(self.name)
+		self.process.terminate()
 		self.process.kill()
-		return None 
+		return str(result)
 
 
 class DroneGroup:
@@ -68,7 +74,9 @@ class DroneGroup:
 
 	def addDrone(self, drone):
 		self.droneList[drone.name]=drone
-
+	
+	def delDrone(self, drone):
+		del self.droneList[drone.name]
 
 class Registry:
 	def __init__(self):
@@ -76,6 +84,7 @@ class Registry:
 
 		rospy.loginfo('Creating "/ardrone_manager/list" topic')
 		self.list_pub=rospy.Publisher('/ardrone_manager/list', String, queue_size=5)
+	
 	def addGroup(self, req):
 		groupName=req.groupName
 		group=self.getGroup(groupName)
@@ -92,7 +101,9 @@ class Registry:
 		group=self.getGroup(groupName)
 		if group:
 			for drone in group.droneList.values:
-				self.delDrone(group.name, drone.name) #For disconnecting the drones
+				drone.stop()
+				group.delDrone(drone) 
+		
 			del self.groupList[groupName]
 			print("Group '"+groupName+"' deleted")
 			self.list_pub.publish(self.getList())
@@ -104,12 +115,13 @@ class Registry:
 	def addDrone(self, req):		
 		groupName=req.groupName
 		droneName=req.droneName
-		droneType=req.droneType
-		ip=req.ip	
-		for group in self.groupList.values():
-			if self.getDrone(group.name, droneName):
-				print("A drone with the name '"+droneName+"'  already exists in the group '"+groupName+"'")
-				return ""
+		droneType=req.droneType	
+		ip=req.ip
+
+		drone=self.getDrone(droneName)
+		if drone:
+			print("A drone with the name '"+droneName+"'  already exists")
+			return ""
 	
 		group = self.getGroup(groupName)
 		if group:
@@ -129,37 +141,37 @@ class Registry:
 			return ""
 
 	def delDrone(self, req):
-		groupName=req.groupName
 		droneName=req.droneName
-		drone = getDrone(groupName, droneName)
+		drone = self.getDrone(droneName)
 		if drone:
+			group = self.getGroupOfDrone(drone)
 			drone.stop()
-			del self.groupList[groupName].droneList[droneName]
+			group.delDrone(drone)
 			self.list_pub.publish(self.getList())
-			print("Drone '"+droneName+"' from group '"+groupName+"' deleted")
+			print("Drone '"+droneName+"' from group '"+group.name+"' deleted")
 			return droneName
-		else:
-			print("Can't delete the drone, no drone with name '"+droneName+"' or group with name '"+group.name+"'")
+		else:	
+			print("Can't delete the drone, no drone with name '"+droneName+"'")
 			return ""
 
 	def moveDrone(self, req):
 		droneName=req.droneName
-		oldGroupName=req.oldGroupName
 		newGroupName=req.newGroupName
-		drone=self.getDrone(oldGroupName, droneName)
-		if drone:
-			newGroup=self.getGroup(newGroupName)
-			if newGroup:
-				newGroup.droneList[droneName]=drone
-				del oldGroup.droneList[droneName]
-				self.list_pub.publish(self.getList())
-				print("Drone '"+drone.name+"' moved from group '"+oldGroupName+"' to group '"+newGroupName+"'")
-				return drone.name
-			else:
-				print("Can't move drone '"+drone.name+"' from group '"+oldGroupName+"' to group '"+newGroupName+"', no destination group with this name")
-				return ""
+		
+
+		drone = self.getDrone(droneName)
+		newGroup=self.getGroup(newGroupName)
+		if newGroup and drone:
+			oldGroup = getGroupOfDrone(drone)
+			oldGroup.delDrone(drone)
+			
+			newGroup.addDrone(drone)
+			
+			self.list_pub.publish(self.getList())
+			print("Drone '"+drone.name+"' moved from group '"+oldGroup.name+"' to group '"+newGroup.name+"'")
+			return drone.name
 		else: 
-			print("Can't move drone '"+drone.name+"' from group '"+oldGroupName+"' to group '"+newGroupName+"', no drone with this name or departure group with this name")
+			print("Can't move drone '"+droneName+"' to '"+newGroupName+"' no drone or destination group with this names")
 			return ""
 		
 	def getList(self):
@@ -169,49 +181,54 @@ class Registry:
 			for drone in group.droneList.values():
 				liste[group.name][drone.name]={'droneType':drone.droneType, 'ip':drone.ip, 'isStarted':drone.isStarted}
 		return str(liste)
+
 	def getGroup(self, groupName):
 		if self.groupList.has_key(groupName):
 			return self.groupList[groupName]
 		else:
 			return False
 	
-	def getDrone(self, groupName, droneName):
-		group = self.getGroup(groupName)
-		if group:
+	def getDrone(self, droneName):
+		for group in self.groupList.values():
 			if group.droneList.has_key(droneName):
 				return group.droneList[droneName]
 			else:
-				 return False
+				return False
 		else:
 			return False
+
+	def getGroupOfDrone(self, drone):
+		for group in self.groupList.values():
+			if group.droneList.has_key(drone.name):
+				return group
+			else:
+				return False
+
 class DroneInterface:
 	def __init__(self, registry):
 		self.registry = registry
 
 	def startDrone(self, req):
-		groupName=req.groupName
 		droneName=req.droneName
-		drone=self.registry.getDrone(groupName, droneName)
+		drone=self.registry.getDrone(droneName)
 		if drone:
-			print("Trying to start drone '"+droneName+"' from group '"+groupName+"")
+			print("Trying to start drone '"+droneName+"'")
 			drone.start()
 			return droneName
 		else:
-			print("Can't start the drone '"+droneName+"', no drone with this name or group '"+groupName+"'")
+			print("Can't start the drone '"+droneName+"', no drone with this name")
 			return ""
 
 	def stopDrone(self, req):
-		groupName=req.groupName
 		droneName=req.droneName
-		drone = self.registry.getDrone(groupName, droneName)
+		drone = self.registry.getDrone(droneName)
 		if drone:
-			print("Trying to stop drone '"+droneName+"' from group '"+groupName+"")
+			print("Trying to stop drone '"+droneName+"'")
 			drone.stop()
 			return droneName
 		else:
-			print("Can't disconnect the drone '"+droneName+"', no drone with this name or group '"+groupName+"'")
+			print("Can't disconnect the drone '"+droneName+"', no drone with this name")
 			return ""
-
 
 
 
@@ -250,5 +267,5 @@ def main():
 #	group1 = registry.addGroup('groupe1')
 #	drone1 = registry.addDrone('groupe1', 'drone1', '192.168.25.10')
 	#drone1.connect()
-
-main()
+if __name__ == '__main__':
+	main()
