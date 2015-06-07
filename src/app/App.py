@@ -51,8 +51,10 @@ class RealDrone: #TODO:abstract class
 		self.isStarted = False
 		self.state='independent'
 	def start(self):
+		self.isStarted=True	
 		return None		
 	def stop(self):
+		self.isStarted=False
 		return None
 class SimDrone:
 	worldProcess=None
@@ -66,16 +68,19 @@ class SimDrone:
 		if self.__class__.worldProcess == None:
 			self.__class__.worldProcess=launchFileLaunch('ardrone_manager','gazebo_world.launch')
 	def start(self):
-		if self.process==None:
+		if self.isStarted == False:
 			self.process=launchFileLaunch('ardrone_manager', 'spawn_quadrotor.launch', 'sim_name:="'+self.name+'"')
+			self.isStarted=True
 			return None
 	def stop(self):
-		rospy.wait_for_service('gazebo/delete_model')
-		delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
-		result=delete_model(self.name)
-		self.process.terminate()
-		self.process.kill()
-		return str(result)
+		if self.isStarted==True:
+			rospy.wait_for_service('gazebo/delete_model')
+			delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
+			result=delete_model(self.name)
+			self.process.terminate()
+			self.process.kill()
+			self.isStarted = False
+			return str(result)
 
 
 class DroneGroup:
@@ -121,7 +126,7 @@ class Registry:
 		groupName=req.groupName
 		group=self.getGroup(groupName)
 		if group:
-			for drone in group.droneList.values:
+			for drone in group.droneList.values():
 				drone.stop()
 				group.delDrone(drone) 
 		
@@ -184,8 +189,9 @@ class Registry:
 		newGroup=self.getGroup(newGroupName)
 		if newGroup and drone:
 			oldGroup = getGroupOfDrone(drone)
-			oldGroup.delDrone(drone)
+			oldGroup.setState(drone, 'independent') #forcing the drone state to stop the follower and avoir conflict with new group existing leader
 			
+			oldGroup.delDrone(drone)
 			newGroup.addDrone(drone)
 			
 			self.list_pub.publish(self.getList())
