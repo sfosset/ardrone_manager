@@ -6,8 +6,9 @@ import roslaunch
 import rospkg
 import subprocess
 import os
-from ardrone_manager.srv import *
 from gazebo_msgs.srv import*
+from ardrone_manager.srv import *
+from ardrone_manager.msg import *
 from std_msgs.msg import *
 def launchFileLaunch2(pkg_name, launch_file_name):
 	rospack=rospkg.RosPack()
@@ -33,13 +34,22 @@ def launchFileLaunch2(pkg_name, launch_file_name):
 def launchFileLaunch(pkg_name, launch_file_name, args=''):
 	return subprocess.Popen(shlex.split('roslaunch '+pkg_name+' '+launch_file_name+' '+args))
 
-
+class Drone:
+	def __init__():
+		return None
+	
+	def start(self):
+		return None
+	def stop(self):
+		return None
+	
 class RealDrone: #TODO:abstract class
 	def __init__(self, name, ip):
 		self.name = name
 		self.ip = ip
 		self.droneType='real'
 		self.isStarted = False
+		self.state='independent'
 	def start(self):
 		return None		
 	def stop(self):
@@ -52,6 +62,7 @@ class SimDrone:
 		self.isStarted = False
 		self.ip="0.0.0.0"
 		self.process=None
+		self.state='independent'
 		if self.__class__.worldProcess == None:
 			self.__class__.worldProcess=launchFileLaunch('ardrone_manager','gazebo_world.launch')
 	def start(self):
@@ -71,12 +82,22 @@ class DroneGroup:
 	def __init__(self, name):
 		self.name=name
 		self.droneList={}
-
+	
+		rospy.loginfo('Creating "ardrone_manager/'+self.name+'/state" topic')
+		self.state_pub=rospy.Publisher( "ardrone_manager/"+self.name+"/state", StateChange, queue_size=5)
+		
 	def addDrone(self, drone):
 		self.droneList[drone.name]=drone
 	
 	def delDrone(self, drone):
 		del self.droneList[drone.name]
+
+	def setState(self, drone, state):
+		msg=StateChange(drone.name, state)
+		self.state_pub.publish(msg)
+		drone.state = state
+		return None
+
 
 class Registry:
 	def __init__(self):
@@ -174,12 +195,12 @@ class Registry:
 			print("Can't move drone '"+droneName+"' to '"+newGroupName+"' no drone or destination group with this names")
 			return ""
 		
-	def getList(self):
+	def getList(self, req = None):
 		liste={}
 		for group in self.groupList.values():
 			liste[group.name]={}
 			for drone in group.droneList.values():
-				liste[group.name][drone.name]={'droneType':drone.droneType, 'ip':drone.ip, 'isStarted':drone.isStarted}
+				liste[group.name][drone.name]={'droneType':drone.droneType, 'ip':drone.ip, 'isStarted':drone.isStarted, 'state':drone.state, 'ip':drone.ip}
 		return str(liste)
 
 	def getGroup(self, groupName):
@@ -230,12 +251,31 @@ class DroneInterface:
 			print("Can't disconnect the drone '"+droneName+"', no drone with this name")
 			return ""
 
+	def setState(self, req):
+		droneName=req.droneName
+		state=req.state
+		if state not in ('leader', 'follower', 'independent'):
+			print("'"+state+"' is not a possible state")
+			return ''
 
+		drone = self.registry.getDrone(droneName)
+		if drone:
+			if drone.state == state:
+				print("Drone '"+droneName+"' already in state '"+state+"'")
+				return ''
+			else:
+				group= self.registry.getGroupOfDrone(drone)
+				print("Setting drone '"+droneName+"' state to '"+state+"'")
+				group.setState(drone, state)
+				return droneName
+		else:
+			print("No drone with name '"+droneName+"'")
+			return ''
 
 def main():
 	
 	rospy.loginfo('Initializing the ARDrone manager node')
-	rospy.init_node('ardrone_manager', None, False, None, False, False, True)
+	rospy.init_node('ardrone_manager')
 
 	rospy.loginfo('Creating new drone registry')
 	registry=Registry()
@@ -258,10 +298,14 @@ def main():
 	rospy.loginfo('Creating "/ardrone_manager/start_drone" service')
 	startDroneService = rospy.Service('/ardrone_manager/start_drone', StartDrone, droneInterface.startDrone)
 	rospy.loginfo('Creating "/ardrone_manager/stop_drone" service')
-	disconnectDroneService = rospy.Service('/ardrone_manager/stop_drone', StopDrone, droneInterface.stopDrone)
-
-
+	disconnectDroneService = rospy.Service('/ardrone_manager/stop_drone', StopDrone, droneInterface.stopDrone)	
 	
+	rospy.loginfo('Creating "/ardrone_manager/get_list" service')
+	disconnectDroneService = rospy.Service('/ardrone_manager/get_list', GetList, registry.getList)	
+
+	rospy.loginfo('Creating "/ardrone_manager/set_state" service')
+	disconnectDroneService = rospy.Service('/ardrone_manager/set_state', SetState, droneInterface.setState)	
+
 
 	rospy.spin()
 #	group1 = registry.addGroup('groupe1')

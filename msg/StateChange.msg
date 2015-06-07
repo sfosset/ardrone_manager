@@ -1,0 +1,2 @@
+string droneName
+string newState

@@ -1,0 +1,4 @@
+string droneName
+string state
+---
+string result
