@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+<arg name="droneName" />
+<arg name="ip" />
+	<node name='$(arg droneName)' pkg='ardrone_autonomy' type='ardrone_driver' args='-ip $(arg ip)'>
+	</node>
+</launch>

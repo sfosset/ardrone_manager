@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+<arg name="drone_name" />
+<arg name="group_name" />
+<group ns="$(arg drone_name)" >
+	<node name ="follower" pkg="ardrone_manager" type="Following.py">
+		<param name='drone_name' value='$(arg drone_name)'/>
+		<param name='group_name' value='$(arg group_name)'/>
+	</node>
+</group>
+</launch>
+
+
+
+
+
+

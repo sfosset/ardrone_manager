@@ -64,6 +64,7 @@ find_package(catkin REQUIRED COMPONENTS
    StopDrone.srv
    GetList.srv
    SetState.srv
+   ChangeGroup.srv
  )
 
 ## Generate actions in the 'action' folder

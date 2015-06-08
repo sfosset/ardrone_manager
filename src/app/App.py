@@ -35,7 +35,7 @@ def launchFileLaunch(pkg_name, launch_file_name, args=''):
 	return subprocess.Popen(shlex.split('roslaunch '+pkg_name+' '+launch_file_name+' '+args))
 
 class Drone:
-	def __init__():
+	def __init__(self):	
 		return None
 	
 	def start(self):
@@ -51,7 +51,9 @@ class RealDrone: #TODO:abstract class
 		self.isStarted = False
 		self.state='independent'
 	def start(self):
-		self.isStarted=True	
+		if self.isStarted == False:
+			self.process=launchFileLaunch('ardrone_manager', 'real_drone.launch', 'ip:="'+self.name+'" droneName:="'+self.name+'"')
+			self.isStarted=True
 		return None		
 	def stop(self):
 		self.isStarted=False
@@ -100,6 +102,11 @@ class DroneGroup:
 	def setState(self, drone, state):
 		msg=StateChange(drone.name, state)
 		self.state_pub.publish(msg)
+		#TODO link with follower node
+		if state=='leader':
+			for droneInGroup in self.droneList.values():
+				if droneInGroup.state == 'leader' and droneInGroup.name!=drone.name:
+					droneInGroup.state='follower'
 		drone.state = state
 		return None
 
@@ -160,6 +167,7 @@ class Registry:
 			
 			group.addDrone(drone)
 			self.list_pub.publish(self.getList())
+			launchFileLaunch('ardrone_manager', 'connect_drone.launch', 'drone_name:="'+drone.name+'" group_name:="'+group.name+'"')
 			print("Drone '"+droneName+"' ("+droneType+") added in group '"+groupName+"'")
 			return droneName
 		else:
@@ -191,9 +199,15 @@ class Registry:
 			oldGroup = getGroupOfDrone(drone)
 			oldGroup.setState(drone, 'independent') #forcing the drone state to stop the follower and avoir conflict with new group existing leader
 			
+			#give change to following node
+			rospy.wait_for_service(drone.name+'/follower/change_group')
+			change_group = rospy.ServiceProxy(drone.name+'/follower/change_group', DeleteModel)
+			change_group(newGroup.name)
+
+
 			oldGroup.delDrone(drone)
 			newGroup.addDrone(drone)
-			
+				
 			self.list_pub.publish(self.getList())
 			print("Drone '"+drone.name+"' moved from group '"+oldGroup.name+"' to group '"+newGroup.name+"'")
 			return drone.name
@@ -241,6 +255,7 @@ class DroneInterface:
 		if drone:
 			print("Trying to start drone '"+droneName+"'")
 			drone.start()
+			self.registry.list_pub.publish(self.registry.getList())	
 			return droneName
 		else:
 			print("Can't start the drone '"+droneName+"', no drone with this name")
@@ -252,6 +267,7 @@ class DroneInterface:
 		if drone:
 			print("Trying to stop drone '"+droneName+"'")
 			drone.stop()
+			self.registry.list_pub.publish(self.registry.getList())	
 			return droneName
 		else:
 			print("Can't disconnect the drone '"+droneName+"', no drone with this name")
@@ -273,6 +289,7 @@ class DroneInterface:
 				group= self.registry.getGroupOfDrone(drone)
 				print("Setting drone '"+droneName+"' state to '"+state+"'")
 				group.setState(drone, state)
+				self.registry.list_pub.publish(self.registry.getList())	
 				return droneName
 		else:
 			print("No drone with name '"+droneName+"'")

@@ -2,21 +2,25 @@
 import rospy
 from nav_msgs.msg import *
 from std_msgs.msg import *
+from ardrone_manager.srv import *
 from ardrone_manager.msg import *
-
+from geometry_msgs.msg import *
 class Follower():
-	def __init__(self, drone):
+	def __init__(self, drone, group):
 		self.drone = drone
+		self.group = group
 		self.leader = None
 		self.state = 'independent'
 		self.currentController = None
 		self.isFollowing = False
-		self.leaderTwist = Twist()
-		self.myTwist = Twist()
+		self.leaderTwist = Quaternion()
+		self.myTwist = Quaternion()
 		self.cmd = Twist()
 		self.leaderOdometrySub=None
-		self.myOdometrySub = rospy.Subscriber(self.drone+"/odometry", Odometry, callbackMyOdometry)
-		self.cmd_vel_pub=rospy.Publisher(self.drone+"/cmd_vel", Twist)
+		self.myOdometrySub = rospy.Subscriber(self.drone+"/imu", Quaternion, self.callbackMyOdometry)
+		self.cmd_vel_pub=rospy.Publisher("/"+self.drone+"/cmd_vel", Twist)
+		self.groupSub = rospy.Subscriber("/ardrone_manager/"+self.group+"/state", StateChange, self.stateSub)
+		self.r = rospy.Rate(1)
 	#receive the state changement from the group publisher and process it
 	def stateSub(self, data):
 		changingDrone = data.droneName
@@ -34,7 +38,9 @@ class Follower():
 					self.state==newState
 				else:
 					if self.leader!=None:
-						self.leaderOdometrySub=rospy.Subscriber(self.leader+"/odometry", Odometry, callbackLeaderOdometry)
+						if self.leaderOdometrySub!=None:
+							self.leaderOdometrySub.unregister()
+						self.leaderOdometrySub=rospy.Subscriber(self.leader+"/imu", Quaternion, self.callbackLeaderOdometry)
 						self.isFollowing=True
 						self.state=newState
 					else:
@@ -53,11 +59,15 @@ class Follower():
 				if self.state=='leader':
 					self.leader = changingDrone
 					self.state = 'follower' 
-					self.leaderOdometrySub=rospy.Subscriber(self.leader+"/odometry", Odometry, callbackLeaderOdometry)
+					if self.leaderOdometrySub!=None:
+						self.leaderOdometrySub.unregister()
+					self.leaderOdometrySub=rospy.Subscriber(self.leader+"/imu", Quaternion, self.callbackLeaderOdometry)
 					self.isFollowing=True	
 				elif self.state=='follower':
 					self.leader = changingDrone
-					self.leaderOdometrySub=rospy.Subscriber(self.leader+"/odometry", Odometry, callbackLeaderOdometry)
+					if self.leaderOdometrySub!=None:
+						self.leaderOdometrySub.unregister()
+					self.leaderOdometrySub=rospy.Subscriber(self.leader+"/imu", Quaternion, self.callbackLeaderOdometry)
 					self.isFollowing=True
 				elif self.state=='independant':
 					self.leader = changingDrone
@@ -67,30 +77,39 @@ class Follower():
 					self.leader=None
 					self.isFollowing=False
 	
-	def follow(self, leader):
-		while(true):
+	def follow(self):
+		while(True):
 			if self.isFollowing:
-				self.cmd.vertical.
-		
-	def callbackLeaderOdometry(data):
-		self.leaderTwist = data.twist
-	def callbackMyOdometry(data)
-		self.myTwist = data.twist
+				self.cmd.angular.z=self.leaderTwist.orientation.z
+				self.cmd_vel_pub.publish(self.cmd)
+			self.r.sleep()
+	def callbackLeaderOdometry(self, data):
+		self.leaderTwist = data
+	def callbackMyOdometry(self, data):
+		self.myTwist = data
+	
+	def changeGroup(self, req):
+		self.leader = None
+		self.group = req.group
+		self.groupSub.unregister()
+		self.groupSub = rospy.Subscriber("/ardrone_manager/"+self.group+"/state", StateChange, self.stateSub)
+
+
 
 def main():
+	rospy.init_node('osef')
 	droneName=rospy.get_param('~drone_name',False)
 	groupName=rospy.get_param('~group_name',False)
-	if !droneName:
+	if not (droneName and groupName):
 		print("Parameters _drone_name and _group_name must be set")
 		exit()
 
 	rospy.loginfo("Initializing "+droneName+"/follower node")
-	rospy.init_node(droneName+'/follower')
 	
-	follower=Follower(droneName)
+	follower=Follower(droneName, groupName)
 	
-	rospy.Subscriber("/ardrone_manager/"+groupName+"/state", StateChange, follower.stateSub)
-
-
+	changeGroupService = rospy.Service("change_group", ChangeGroup, follower.changeGroup)
+	follower.follow()
+	exit()	
 if __name__=='__main__':
 	main()
